@@ -1,4 +1,4 @@
-# 🚨 IPWatchdog (IP Monitoring & Security)
+# 🚨 IPWatchdog
 
 ## 📄 Project Overview
 **IPWatchdog** is a machine learning-based security tool that automatically identifies suspicious IP addresses from web server access logs. It uses K-means clustering to analyze access patterns and detect potentially malicious behavior.
