@@ -52,17 +52,6 @@
 
 ````
 
----
-
-## ⚙️ Installation
-
-```bash
-git clone https://github.com/YOUR_USERNAME/IPWatchdog.git
-cd IPWatchdog
-pip install -r requirements.txt
-````
-
-
 ## 📝 Sample Input Format
 
 Your log file (e.g., `access_log.txt`) should look like this:
@@ -70,8 +59,6 @@ Your log file (e.g., `access_log.txt`) should look like this:
 ```
 xxx.xxx.xxx.xxx [10/Oct/2023:13:55:36 -0700] "GET /index.html HTTP/1.1"
 ```
-
----
 
 ## 📤 Output
 
