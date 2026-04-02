@@ -133,4 +133,4 @@ def upload_file():
     return render_template_string(HTML, suspicious_ip=suspicious_ip, is_whitelisted=is_whitelisted, is_blacklisted=is_blacklisted, chart_img=chart_img)
 
 if __name__ == '__main__':
-    app.run(debug=True) 
+    app.run()
