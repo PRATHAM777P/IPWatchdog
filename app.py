@@ -8,6 +8,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import base64
 from io import BytesIO
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'  # Needed for flashing messages
@@ -93,7 +94,8 @@ def upload_file():
             flash('No selected log file')
             return redirect(request.url)
         if file and allowed_file(file.filename):
-            tmp_path = os.path.join(UPLOAD_FOLDER, file.filename)
+            safe_filename = secure_filename(file.filename)
+            tmp_path = os.path.join(UPLOAD_FOLDER, safe_filename)
             file.save(tmp_path)
             whitelist = read_ip_file(whitelist_file)
             blacklist = read_ip_file(blacklist_file)
