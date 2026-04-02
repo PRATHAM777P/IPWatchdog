@@ -86,13 +86,13 @@ def upload_file():
     if request.method == 'POST':
         if 'logfile' not in request.files:
             flash('No log file part')
-            return redirect(request.url)
+            return redirect(url_for('upload_file'))
         file = request.files['logfile']
         whitelist_file = request.files.get('whitelist')
         blacklist_file = request.files.get('blacklist')
         if file.filename == '':
             flash('No selected log file')
-            return redirect(request.url)
+            return redirect(url_for('upload_file'))
         if file and allowed_file(file.filename):
             safe_filename = secure_filename(file.filename)
             tmp_path = os.path.join(UPLOAD_FOLDER, safe_filename)
