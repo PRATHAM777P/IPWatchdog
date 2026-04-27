@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IPWatchdog – Suspicious IP Detection</title>
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        crossorigin="anonymous" />
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+        crossorigin="anonymous" />
+  <style>
+    :root {
+      --accent: #00d4aa;
+      --accent-dim: #00a884;
+      --danger-soft: #ff6b6b;
+      --warn-soft: #ffa94d;
+      --card-bg: #1e2433;
+    }
+    body { background: #12161f; font-family: 'Segoe UI', system-ui, sans-serif; }
+    .navbar-brand span { color: var(--accent); }
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid rgba(255,255,255,.07);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      transition: transform .15s;
+    }
+    .stat-card:hover { transform: translateY(-2px); }
+    .stat-card .value { font-size: 2rem; font-weight: 700; color: var(--accent); }
+    .stat-card .label { font-size: .8rem; color: #8892a4; text-transform: uppercase; letter-spacing: .06em; }
+    .upload-zone {
+      border: 2px dashed rgba(0,212,170,.35);
+      border-radius: 12px;
+      transition: border-color .2s, background .2s;
+    }
+    .upload-zone:hover, .upload-zone.dragover {
+      border-color: var(--accent);
+      background: rgba(0,212,170,.05);
+    }
+    .progress-wrapper { display: none; }
+    .badge-anomaly { background: var(--danger-soft); }
+    .badge-warn    { background: var(--warn-soft); color: #1a1a1a; }
+    .badge-ok      { background: #51cf66; color: #1a1a1a; }
+    .tag { display: inline-block; padding: .2em .6em; border-radius: 20px;
+           font-size: .72rem; background: rgba(255,255,255,.08); margin: 2px; }
+    .score-bar {
+      height: 6px; border-radius: 3px;
+      background: linear-gradient(90deg, #ff6b6b, #ffa94d, #51cf66);
+    }
+    .live-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--accent); display: inline-block;
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.3} }
+    #liveTable tbody tr { animation: fadeIn .3s; }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1} }
+    pre.rules-block {
+      background: #0d1117; border: 1px solid rgba(255,255,255,.1);
+      border-radius: 8px; padding: 1rem; font-size: .78rem; max-height: 200px; overflow-y: auto;
+    }
+    .tab-pane { padding-top: 1.5rem; }
+    #toastContainer { position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 9999; }
+  </style>
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar navbar-dark px-4 py-3" style="background:#0d1117;border-bottom:1px solid rgba(255,255,255,.07)">
+  <a class="navbar-brand fw-bold fs-5" href="/">
+    <i class="bi bi-shield-shaded me-2" style="color:var(--accent)"></i>IP<span>Watchdog</span>
+  </a>
+  <div class="d-flex align-items-center gap-3">
+    <span class="text-muted small">ML-Powered Intrusion Detector</span>
+    <button class="btn btn-sm btn-outline-secondary" id="themeToggle">
+      <i class="bi bi-sun-fill"></i>
+    </button>
+  </div>
+</nav>
+
+<!-- Toast Container -->
+<div id="toastContainer"></div>
+
+<div class="container-fluid px-4 py-4">
+
+  <!-- Stats Row -->
+  <div class="row g-3 mb-4" id="statsRow" style="display:none!important">
+    <div class="col-6 col-md-3">
+      <div class="stat-card">
+        <div class="value" id="statRequests">–</div>
+        <div class="label"><i class="bi bi-activity me-1"></i>Total Requests</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-card">
+        <div class="value" id="statUniqueIPs">–</div>
+        <div class="label"><i class="bi bi-globe me-1"></i>Unique IPs</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-card">
+        <div class="value" id="statSuspicious" style="color:var(--danger-soft)">–</div>
+        <div class="label"><i class="bi bi-exclamation-triangle me-1"></i>Suspicious IPs</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-card">
+        <div class="value" id="statFormat" style="font-size:1.2rem">–</div>
+        <div class="label"><i class="bi bi-file-earmark-text me-1"></i>Detected Format</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main tabs -->
+  <ul class="nav nav-tabs mb-0" id="mainTabs">
+    <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tabAnalyze"><i class="bi bi-upload me-1"></i>Analyze Log</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabResults"><i class="bi bi-table me-1"></i>Results</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabChart"><i class="bi bi-bar-chart me-1"></i>Chart</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabActions"><i class="bi bi-shield-lock me-1"></i>Block Rules</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabMonitor"><i class="bi bi-broadcast me-1"></i>Live Monitor</a></li>
+  </ul>
+
+  <div class="tab-content" style="background:var(--card-bg);border:1px solid rgba(255,255,255,.07);border-top:none;border-radius:0 0 12px 12px;padding:0 1.5rem 1.5rem">
+
+    <!-- ── Tab: Analyze ── -->
+    <div class="tab-pane fade show active" id="tabAnalyze">
+      <form id="uploadForm" enctype="multipart/form-data">
+        <div class="upload-zone p-4 mb-4 text-center" id="dropZone">
+          <i class="bi bi-cloud-upload fs-1 text-muted"></i>
+          <p class="mt-2 mb-1 fw-semibold">Drop your access log here or click to browse</p>
+          <p class="text-muted small mb-3">Supports .log and .txt — Apache, Nginx, JSON (max 50 MB)</p>
+          <input type="file" id="logfile" name="logfile" accept=".log,.txt" class="form-control" style="max-width:340px;margin:auto">
+        </div>
+
+        <div class="row g-3 mb-3">
+          <div class="col-md-4">
+            <label class="form-label small text-muted">Log Format</label>
+            <select name="log_format" class="form-select form-select-sm">
+              <option value="auto" selected>Auto-detect</option>
+              <option value="apache">Apache / Combined</option>
+              <option value="nginx">Nginx</option>
+              <option value="json">JSON (one object/line)</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small text-muted">Whitelist (optional, one IP/line)</label>
+            <input type="file" name="whitelist" accept=".txt" class="form-control form-control-sm">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small text-muted">Blacklist (optional, one IP/line)</label>
+            <input type="file" name="blacklist" accept=".txt" class="form-control form-control-sm">
+          </div>
+        </div>
+
+        <!-- Progress -->
+        <div class="progress-wrapper mb-3" id="progressWrapper">
+          <div class="d-flex justify-content-between small text-muted mb-1">
+            <span id="progressMsg">Processing…</span>
+            <span id="progressPct">0%</span>
+          </div>
+          <div class="progress" style="height:6px">
+            <div class="progress-bar bg-success progress-bar-striped progress-bar-animated"
+                 id="progressBar" style="width:0%"></div>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-sm px-4" style="background:var(--accent);color:#000;font-weight:600" id="analyzeBtn">
+          <i class="bi bi-cpu me-1"></i>Run Analysis
+        </button>
+      </form>
+    </div>
+
+    <!-- ── Tab: Results ── -->
+    <div class="tab-pane fade" id="tabResults">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <input type="text" id="resultSearch" class="form-control form-control-sm" placeholder="Filter by IP…" style="max-width:220px">
+        <a id="exportBtn" class="btn btn-sm btn-outline-secondary" style="display:none">
+          <i class="bi bi-download me-1"></i>Export CSV
+        </a>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-dark table-hover table-sm" id="resultsTable">
+          <thead class="text-muted small" style="border-bottom:1px solid rgba(255,255,255,.1)">
+            <tr>
+              <th>IP Address</th>
+              <th>Requests</th>
+              <th>Error Rate</th>
+              <th>Burst Score</th>
+              <th>Anomaly Score</th>
+              <th>Status</th>
+              <th>Why Flagged</th>
+              <th>Geo / Intel</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody">
+            <tr><td colspan="8" class="text-center text-muted py-5">
+              <i class="bi bi-inbox fs-3 d-block mb-2"></i>Run an analysis to see results
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── Tab: Chart ── -->
+    <div class="tab-pane fade" id="tabChart">
+      <div class="row g-4">
+        <div class="col-md-6">
+          <p class="text-muted small mb-2">Top 10 IPs by Request Count</p>
+          <canvas id="barChart" height="220"></canvas>
+        </div>
+        <div class="col-md-6">
+          <p class="text-muted small mb-2">Anomaly Score Distribution</p>
+          <canvas id="scatterChart" height="220"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Tab: Block Rules ── -->
+    <div class="tab-pane fade" id="tabActions">
+      <p class="text-muted small mb-3">Auto-generated firewall rules for all flagged IPs. Review carefully before applying.</p>
+      <ul class="nav nav-pills mb-3 gap-2" id="ruleTabs">
+        <li class="nav-item"><a class="nav-link active small" data-rule="htaccess">.htaccess (Apache)</a></li>
+        <li class="nav-item"><a class="nav-link small" data-rule="nginx">Nginx ACL</a></li>
+        <li class="nav-item"><a class="nav-link small" data-rule="iptables">iptables</a></li>
+      </ul>
+      <pre class="rules-block" id="rulesBlock">Run an analysis first to generate block rules.</pre>
+      <button class="btn btn-sm btn-outline-secondary mt-2" id="copyRules">
+        <i class="bi bi-clipboard me-1"></i>Copy
+      </button>
+    </div>
+
+    <!-- ── Tab: Live Monitor ── -->
+    <div class="tab-pane fade" id="tabMonitor">
+      <div class="d-flex align-items-center gap-3 mb-3">
+        <span class="live-dot" id="liveDot" style="opacity:.3"></span>
+        <span class="small text-muted" id="liveStatus">Not monitoring</span>
+        <div class="flex-grow-1">
+          <input type="text" id="monitorPath" class="form-control form-control-sm"
+                 placeholder="/var/log/nginx/access.log (must be in MONITOR_ALLOWED_PATHS)">
+        </div>
+        <select id="monitorFormat" class="form-select form-select-sm" style="width:120px">
+          <option value="auto">auto</option>
+          <option value="apache">apache</option>
+          <option value="nginx">nginx</option>
+          <option value="json">json</option>
+        </select>
+        <button class="btn btn-sm btn-success" id="startMonitorBtn">
+          <i class="bi bi-play-fill me-1"></i>Start
+        </button>
+      </div>
+      <div class="table-responsive" style="max-height:400px;overflow-y:auto">
+        <table class="table table-dark table-sm" id="liveTable">
+          <thead class="sticky-top text-muted small" style="background:var(--card-bg)">
+            <tr><th>IP</th><th>Method</th><th>Path</th><th>Status</th><th>Score</th><th>Time</th></tr>
+          </thead>
+          <tbody id="liveBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /tab-content -->
+</div><!-- /container -->
+
+<!-- Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" crossorigin="anonymous"></script>
+<script>
+// ── State ────────────────────────────────────────────────────────────────
+let _results = [], _topIPs = [], _htaccess = '', _nginx = '', _iptables = '';
+let _sessionId = null, _barChart = null, _scatterChart = null;
+let _sseSource = null;
+
+// ── SSE setup ─────────────────────────────────────────────────────────────
+function startSSE() {
+  if (_sseSource) return;
+  _sseSource = new EventSource('/stream');
+  _sseSource.onmessage = e => {
+    const ev = JSON.parse(e.data);
+    if (ev.type === 'status') updateProgress(ev.data.message, ev.data.pct);
+    if (ev.type === 'live_entry') appendLiveRow(ev.data);
+  };
+}
+startSSE();
+
+// ── Upload form ────────────────────────────────────────────────────────────
+document.getElementById('uploadForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const btn = document.getElementById('analyzeBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Analyzing…';
+  showProgress(true);
+  updateProgress('Uploading…', 5);
+
+  try {
+    const res = await fetch('/analyze', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok || data.error) { toast(data.error || 'Analysis failed', 'danger'); return; }
+    renderResults(data);
+    toast(`Analysis complete – ${data.summary.suspicious_ips} suspicious IP(s) detected`, 'success');
+    document.querySelector('[href="#tabResults"]').click();
+  } catch(err) {
+    toast('Network error: ' + err.message, 'danger');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-cpu me-1"></i>Run Analysis';
+    setTimeout(() => showProgress(false), 1200);
+  }
+});
+
+// ── Render results ─────────────────────────────────────────────────────────
+function renderResults(data) {
+  _results = data.results || [];
+  _topIPs  = data.top_ips  || [];
+  _sessionId = data.session_id;
+  const sum = data.summary;
+
+  // Stats
+  document.getElementById('statRequests').textContent   = sum.total_requests.toLocaleString();
+  document.getElementById('statUniqueIPs').textContent  = sum.unique_ips.toLocaleString();
+  document.getElementById('statSuspicious').textContent = sum.suspicious_ips.toLocaleString();
+  document.getElementById('statFormat').textContent     = (sum.parse_format || '').toUpperCase();
+  document.getElementById('statsRow').style.display = 'flex';
+
+  // Block rules
+  _htaccess  = data.htaccess_rules || '';
+  // Build nginx / iptables client-side from flagged IPs list
+  const flagged = _results.filter(r => r.anomaly_score < 0 && !r.whitelisted).map(r => r.IP);
+  _nginx     = buildNginxRules(flagged);
+  _iptables  = buildIptablesRules(flagged);
+  document.getElementById('rulesBlock').textContent = _htaccess;
+
+  // Export
+  const expBtn = document.getElementById('exportBtn');
+  expBtn.style.display = 'inline-block';
+  expBtn.href = `/export/${_sessionId}`;
+
+  // Table
+  renderTable(_results);
+
+  // Charts
+  renderBarChart(_topIPs);
+  renderScatterChart(_results);
+}
+
+function renderTable(rows) {
+  const tbody = document.getElementById('resultsBody');
+  if (!rows.length) { tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">No results</td></tr>'; return; }
+  tbody.innerHTML = rows.map(r => {
+    const score = parseFloat(r.anomaly_score);
+    const badge = score < -0.4  ? '<span class="badge badge-anomaly">Suspicious</span>'
+                : score < -0.1  ? '<span class="badge badge-warn">Unusual</span>'
+                :                 '<span class="badge badge-ok">Normal</span>';
+    const override = r.blacklisted ? '<span class="badge bg-danger ms-1">BL</span>'
+                   : r.whitelisted ? '<span class="badge bg-success ms-1">WL</span>' : '';
+    const geo = r.threat_intel || {};
+    const geoStr = [geo.country, geo.isp].filter(Boolean).join(' / ') || '–';
+    const proxyBadge = geo.is_proxy ? '<span class="tag">Proxy</span>' : '';
+    const torBadge   = geo.is_tor   ? '<span class="tag" style="background:rgba(255,107,107,.25)">Tor</span>' : '';
+    const abuseBadge = geo.abuse_score > 0 ? `<span class="tag">Abuse: ${geo.abuse_score}</span>` : '';
+    const reasons = (r.explanation || []).map(s => `<div class="small text-muted">${s}</div>`).join('');
+    const scoreW  = Math.round(Math.abs(Math.min(score, 0)) * 100);
+    return `<tr>
+      <td class="fw-semibold">${esc(r.IP)}${override}</td>
+      <td>${r.request_count}</td>
+      <td>${pct(r.error_rate)}</td>
+      <td>${pct(r.burst_score)}</td>
+      <td>
+        <div class="score-bar mb-1" style="width:${scoreW}%;max-width:80px"></div>
+        <code style="font-size:.75rem">${score.toFixed(3)}</code>
+      </td>
+      <td>${badge}</td>
+      <td>${reasons}</td>
+      <td>${geoStr}<br>${proxyBadge}${torBadge}${abuseBadge}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Charts ─────────────────────────────────────────────────────────────────
+function renderBarChart(topIPs) {
+  const ctx = document.getElementById('barChart').getContext('2d');
+  if (_barChart) _barChart.destroy();
+  _barChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: topIPs.map(r => r.IP),
+      datasets: [{ label: 'Requests', data: topIPs.map(r => r.request_count),
+        backgroundColor: topIPs.map(r => r.anomaly_score < 0 ? '#ff6b6b88' : '#00d4aa88'),
+        borderColor:     topIPs.map(r => r.anomaly_score < 0 ? '#ff6b6b'   : '#00d4aa'),
+        borderWidth: 1 }]
+    },
+    options: { responsive: true, plugins: { legend: { display: false } },
+      scales: { x: { ticks: { color: '#8892a4', maxRotation: 45 } }, y: { ticks: { color: '#8892a4' } } }
+    }
+  });
+}
+
+function renderScatterChart(results) {
+  const ctx = document.getElementById('scatterChart').getContext('2d');
+  if (_scatterChart) _scatterChart.destroy();
+  const pts = results.map(r => ({ x: r.request_count, y: r.anomaly_score, label: r.IP }));
+  _scatterChart = new Chart(ctx, {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        label: 'IPs', data: pts,
+        backgroundColor: pts.map(p => p.y < 0 ? '#ff6b6b99' : '#00d4aa99'),
+        pointRadius: 5
+      }]
+    },
+    options: { responsive: true,
+      scales: {
+        x: { title: { display: true, text: 'Request Count', color: '#8892a4' }, ticks: { color: '#8892a4' } },
+        y: { title: { display: true, text: 'Anomaly Score', color: '#8892a4' }, ticks: { color: '#8892a4' } }
+      },
+      plugins: { legend: { display: false } }
+    }
+  });
+}
+
+// ── Block rule generators (client-side for nginx/iptables) ─────────────────
+function buildNginxRules(ips) {
+  if (!ips.length) return '# No IPs to block.';
+  return '# Generated by IPWatchdog\ngeo $blocked_ip {\n    default 0;\n'
+    + ips.map(ip => `    ${ip} 1;`).join('\n')
+    + '\n}\n# In server block: if ($blocked_ip) { return 403; }';
+}
+function buildIptablesRules(ips) {
+  if (!ips.length) return '# No IPs to block.';
+  return '#!/bin/bash\n# Generated by IPWatchdog – run as root\n'
+    + ips.map(ip => `iptables -I INPUT -s ${ip} -j DROP`).join('\n');
+}
+
+// ── Rule tabs ──────────────────────────────────────────────────────────────
+document.querySelectorAll('#ruleTabs .nav-link').forEach(a => {
+  a.addEventListener('click', e => {
+    document.querySelectorAll('#ruleTabs .nav-link').forEach(x => x.classList.remove('active'));
+    e.target.classList.add('active');
+    const type = e.target.dataset.rule;
+    document.getElementById('rulesBlock').textContent =
+      type === 'htaccess' ? _htaccess : type === 'nginx' ? _nginx : _iptables;
+  });
+});
+
+document.getElementById('copyRules').addEventListener('click', () => {
+  navigator.clipboard.writeText(document.getElementById('rulesBlock').textContent)
+    .then(() => toast('Copied to clipboard', 'success'));
+});
+
+// ── Live monitor ───────────────────────────────────────────────────────────
+document.getElementById('startMonitorBtn').addEventListener('click', async () => {
+  const path = document.getElementById('monitorPath').value.trim();
+  const format = document.getElementById('monitorFormat').value;
+  if (!path) { toast('Enter a log path', 'warning'); return; }
+
+  const res = await fetch('/monitor', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, format })
+  });
+  const data = await res.json();
+  if (!res.ok) { toast(data.error, 'danger'); return; }
+
+  document.getElementById('liveDot').style.opacity = '1';
+  document.getElementById('liveStatus').textContent = 'Live – tailing ' + path;
+  toast('Monitoring started', 'success');
+});
+
+function appendLiveRow(entry) {
+  const tbody = document.getElementById('liveBody');
+  const score = parseFloat(entry.anomaly_score) || 0;
+  const color = score < -0.3 ? 'rgba(255,107,107,.15)' : '';
+  const tr = document.createElement('tr');
+  tr.style.background = color;
+  tr.innerHTML = `<td>${esc(entry.IP||'')}</td><td>${esc(entry.method||'')}</td>
+    <td class="text-truncate" style="max-width:180px">${esc(entry.path||'')}</td>
+    <td>${entry.status||''}</td><td><code>${score.toFixed(2)}</code></td>
+    <td class="text-muted small">${new Date().toLocaleTimeString()}</td>`;
+  tbody.prepend(tr);
+  if (tbody.children.length > 200) tbody.lastElementChild.remove();
+}
+
+// ── Filter ──────────────────────────────────────────────────────────────────
+document.getElementById('resultSearch').addEventListener('input', e => {
+  const q = e.target.value.toLowerCase();
+  renderTable(_results.filter(r => r.IP.toLowerCase().includes(q)));
+});
+
+// ── Progress ───────────────────────────────────────────────────────────────
+function showProgress(show) {
+  document.getElementById('progressWrapper').style.display = show ? 'block' : 'none';
+}
+function updateProgress(msg, pct) {
+  document.getElementById('progressMsg').textContent = msg;
+  document.getElementById('progressPct').textContent = pct + '%';
+  document.getElementById('progressBar').style.width = pct + '%';
+}
+
+// ── Drag & drop ────────────────────────────────────────────────────────────
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) {
+    const dt = new DataTransfer(); dt.items.add(file);
+    document.getElementById('logfile').files = dt.files;
+  }
+});
+
+// ── Theme toggle ───────────────────────────────────────────────────────────
+document.getElementById('themeToggle').addEventListener('click', () => {
+  const el = document.documentElement;
+  const isDark = el.getAttribute('data-bs-theme') === 'dark';
+  el.setAttribute('data-bs-theme', isDark ? 'light' : 'dark');
+});
+
+// ── Toast notifications ────────────────────────────────────────────────────
+function toast(msg, type = 'info') {
+  const colors = { success: '#51cf66', danger: '#ff6b6b', warning: '#ffa94d', info: '#74c0fc' };
+  const div = document.createElement('div');
+  div.style.cssText = `background:${colors[type]||colors.info};color:#000;padding:.6rem 1rem;
+    border-radius:8px;margin-top:.5rem;font-size:.85rem;font-weight:500;
+    box-shadow:0 4px 12px rgba(0,0,0,.4);animation:fadeIn .2s`;
+  div.textContent = msg;
+  document.getElementById('toastContainer').appendChild(div);
+  setTimeout(() => div.remove(), 4000);
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function esc(s) { return String(s).replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])); }
+function pct(v) { return (parseFloat(v||0)*100).toFixed(1) + '%'; }
+</script>
+</body>
+</html>
