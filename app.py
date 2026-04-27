@@ -191,7 +191,7 @@ def analyze():
 
     except Exception as exc:
         logger.exception("Analysis pipeline error")
-        return jsonify({"error": f"Internal error: {exc}"}), 500
+        return jsonify({"error": "An internal error occurred"}), 500
 
     finally:
         if os.path.exists(tmp_path):
