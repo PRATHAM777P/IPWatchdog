@@ -11,6 +11,7 @@ import threading
 import tempfile
 import time
 import logging
+from pathlib import Path
 
 from flask import (
     Flask, render_template, request, redirect,
@@ -256,19 +257,27 @@ def _validated_monitor_log_path(user_path, allowed_paths):
     if not os.path.isabs(user_path):
         raise ValueError("Path must be absolute")
 
-    real_log_path = os.path.realpath(user_path)
+    try:
+        real_log_path = Path(user_path).resolve(strict=True)
+    except FileNotFoundError:
+        raise ValueError("File not found")
+    except OSError:
+        raise ValueError("Invalid path")
 
     allowed_roots = []
     for p in allowed_paths or []:
         if isinstance(p, str) and p:
-            root = os.path.realpath(p)
-            if os.path.isdir(root):
+            try:
+                root = Path(p).resolve(strict=True)
+            except OSError:
+                continue
+            if root.is_dir():
                 allowed_roots.append(root)
 
     for root in allowed_roots:
         try:
-            if os.path.commonpath([real_log_path, root]) == root:
-                return real_log_path
+            real_log_path.relative_to(root)
+            return str(real_log_path)
         except ValueError:
             continue
 
@@ -291,12 +300,11 @@ def monitor_start():
             log_path, app.config.get("MONITOR_ALLOWED_PATHS", [])
         )
     except ValueError as exc:
+        if str(exc) == "File not found":
+            return jsonify({"error": "File not found"}), 404
         return jsonify({"error": str(exc)}), 400
     except PermissionError as exc:
         return jsonify({"error": str(exc)}), 403
-
-    if not os.path.isfile(real_log_path):
-        return jsonify({"error": "File not found"}), 404
 
     def tail_worker():
         parser = LogParser(log_format=log_format)
