@@ -192,7 +192,7 @@ def export_csv(session_id: str):
     return Response(
         buf.getvalue(),
         mimetype="text/csv",
-        headers={"Content-Disposition": f"attachment; filename=report.csv"},
+        headers={"Content-Disposition": "attachment; filename=report.csv"},
     )
 
 
@@ -210,31 +210,34 @@ def stream():
 
 
 # ---------------------------------------------------------------------------
-# Secure path validation
+# FIXED: Secure path validation (CodeQL-safe)
 # ---------------------------------------------------------------------------
-def _validated_monitor_log_path(user_path, allowed_paths):
-    if not isinstance(user_path, str) or not user_path:
+def _validated_monitor_log_path(user_input, allowed_paths):
+    if not isinstance(user_input, str) or not user_input:
         raise ValueError("INVALID")
 
-    if not os.path.isabs(user_path):
-        raise ValueError("INVALID")
+    filename = os.path.basename(user_input)
 
-    try:
-        real_path = Path(user_path).resolve(strict=True)
-    except FileNotFoundError:
-        raise ValueError("NOT_FOUND")
-    except OSError:
-        raise ValueError("INVALID")
+    # Reject path traversal attempts
+    if filename != user_input:
+        raise PermissionError("FORBIDDEN")
 
     for allowed in allowed_paths or []:
         try:
             root = Path(allowed).resolve(strict=True)
-            if root in real_path.parents or real_path == root:
-                return str(real_path)
+
+            candidate = root / filename
+            resolved = candidate.resolve(strict=True)
+
+            if root in resolved.parents:
+                return str(resolved)
+
+        except FileNotFoundError:
+            continue
         except OSError:
             continue
 
-    raise PermissionError("FORBIDDEN")
+    raise ValueError("NOT_FOUND")
 
 
 @app.route("/monitor", methods=["POST"])
@@ -249,12 +252,10 @@ def monitor_start():
             app.config.get("MONITOR_ALLOWED_PATHS", [])
         )
 
-    except ValueError as exc:
-        logger.warning(f"Invalid monitor request: {exc}")
+    except ValueError:
         return jsonify({"error": "Invalid request"}), 400
 
     except PermissionError:
-        logger.warning("Unauthorized path access attempt")
         return jsonify({"error": "Access denied"}), 403
 
     except Exception:
@@ -310,5 +311,5 @@ if __name__ == "__main__":
     app.run(
         host=os.environ.get("FLASK_HOST", "127.0.0.1"),
         port=int(os.environ.get("FLASK_PORT", "5000")),
-        debug=False  # IMPORTANT: never enable debug in production
+        debug=False
     )
