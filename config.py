@@ -25,11 +25,17 @@ class AppConfig:
 
     # -----------------------------------------------------------------------
     # Real-time monitoring
-    # Restrict which filesystem paths the monitor endpoint may tail.
-    # Set MONITOR_ALLOWED_PATHS as a colon-separated list in your .env.
     # -----------------------------------------------------------------------
     _raw_paths: str = os.environ.get("MONITOR_ALLOWED_PATHS", "")
-    MONITOR_ALLOWED_PATHS: list = [p for p in _raw_paths.split(":") if p]
+
+    if _raw_paths:
+        MONITOR_ALLOWED_PATHS: list = [p.strip() for p in _raw_paths.split(":") if p.strip()]
+    else:
+        # Default paths if .env is not set
+        if os.name == "nt":  # Windows
+            MONITOR_ALLOWED_PATHS: list = ["C:\\logs\\"]
+        else:  # Linux / Mac
+            MONITOR_ALLOWED_PATHS: list = ["/var/log/nginx/", "/var/log/"]
 
     # -----------------------------------------------------------------------
     # Threat Intelligence (all optional – features degrade gracefully if absent)
