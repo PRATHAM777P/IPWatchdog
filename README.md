@@ -284,6 +284,7 @@ IPWatchdog/
 ├── .gitignore               ← Excludes .env, *.log, result.txt, *.csv
 ├── README.md
 ├── SECURITY.md
+├── result.txt
 └── .github/
     └── workflows/
         └── codeql.yml       ← Automated CodeQL security scanning
