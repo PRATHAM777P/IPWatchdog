@@ -56,15 +56,6 @@
 ---
 
 ## ✨ Features
-
-<div align="center">
-<img src="https://raw.githubusercontent.com/PRATHAM777P/IPWatchdog/main/assets/features-banner.gif" alt="Features" width="70%"/>
-
-> ⚠️ *Place your features GIF at `assets/features-banner.gif`*
-</div>
-
-<br/>
-
 <table>
 <tr>
 <td width="50%">
@@ -178,12 +169,6 @@ Browser ──POST /analyze──▶ app.py
 
 ## 🚀 Quick Start
 
-<div align="center">
-<img src="https://raw.githubusercontent.com/PRATHAM777P/IPWatchdog/main/assets/setup.gif" alt="Setup GIF" width="70%"/>
-
-> ⚠️ *Place your setup GIF at `assets/setup.gif`*
-</div>
-
 ### Prerequisites
 
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square&logo=python&logoColor=white)
@@ -217,8 +202,8 @@ python app.py
 ### Sample Log Format
 
 ```log
-192.168.1.1 - - [10/Oct/2023:13:55:36 -0700] "GET /index.html HTTP/1.1" 200 2326
-10.0.0.5   - - [10/Oct/2023:13:55:37 -0700] "POST /login HTTP/1.1" 401 512
+192.168.x.x - - [10/Oct/2023:13:55:36 -0700] "GET /index.html HTTP/1.1" 200 2326
+10.x.x.x  - - [10/Oct/2023:13:55:37 -0700] "POST /login HTTP/1.1" 401 512
 ```
 
 ---
