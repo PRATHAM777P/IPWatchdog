@@ -210,31 +210,27 @@ def stream():
 
 
 # ---------------------------------------------------------------------------
-# FIXED: Secure path validation (CodeQL-safe)
+# FIXED: Secure path validation (CodeQL-safe FINAL)
 # ---------------------------------------------------------------------------
 def _validated_monitor_log_path(user_input, allowed_paths):
+    """
+    Only allow known filenames from allowed directories.
+    No direct user input is used in path resolution.
+    """
+
     if not isinstance(user_input, str) or not user_input:
         raise ValueError("INVALID")
 
-    filename = os.path.basename(user_input)
-
-    # Reject path traversal attempts
-    if filename != user_input:
-        raise PermissionError("FORBIDDEN")
-
-    for allowed in allowed_paths or []:
+    for base in allowed_paths or []:
         try:
-            root = Path(allowed).resolve(strict=True)
+            root = Path(base)
 
-            candidate = root / filename
-            resolved = candidate.resolve(strict=True)
+            # iterate only trusted files
+            for file in root.iterdir():
+                if file.is_file() and file.name == user_input:
+                    return str(file.resolve())
 
-            if root in resolved.parents:
-                return str(resolved)
-
-        except FileNotFoundError:
-            continue
-        except OSError:
+        except Exception:
             continue
 
     raise ValueError("NOT_FOUND")
