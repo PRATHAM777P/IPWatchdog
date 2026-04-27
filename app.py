@@ -248,6 +248,33 @@ def stream():
     )
 
 
+def _validated_monitor_log_path(user_path, allowed_paths):
+    """Return canonical validated log path or raise ValueError/PermissionError."""
+    if not isinstance(user_path, str) or not user_path:
+        raise ValueError("Path is required")
+
+    if not os.path.isabs(user_path):
+        raise ValueError("Path must be absolute")
+
+    real_log_path = os.path.realpath(user_path)
+
+    allowed_roots = []
+    for p in allowed_paths or []:
+        if isinstance(p, str) and p:
+            root = os.path.realpath(p)
+            if os.path.isdir(root):
+                allowed_roots.append(root)
+
+    for root in allowed_roots:
+        try:
+            if os.path.commonpath([real_log_path, root]) == root:
+                return real_log_path
+        except ValueError:
+            continue
+
+    raise PermissionError("Path not in allowed monitor paths")
+
+
 @app.route("/monitor", methods=["POST"])
 def monitor_start():
     """
@@ -259,18 +286,14 @@ def monitor_start():
     log_path = body.get("path", "")
     log_format = body.get("format", "auto")
 
-    if not os.path.isabs(log_path):
-        return jsonify({"error": "Path must be absolute"}), 400
-
-    real_log_path = os.path.realpath(log_path)
-    allowed_paths = app.config.get("MONITOR_ALLOWED_PATHS", [])
-    allowed_roots = [os.path.realpath(p) for p in allowed_paths]
-
-    if not any(
-        os.path.commonpath([real_log_path, root]) == root
-        for root in allowed_roots
-    ):
-        return jsonify({"error": "Path not in allowed monitor paths"}), 403
+    try:
+        real_log_path = _validated_monitor_log_path(
+            log_path, app.config.get("MONITOR_ALLOWED_PATHS", [])
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except PermissionError as exc:
+        return jsonify({"error": str(exc)}), 403
 
     if not os.path.isfile(real_log_path):
         return jsonify({"error": "File not found"}), 404
