@@ -259,17 +259,26 @@ def monitor_start():
     log_path = body.get("path", "")
     log_format = body.get("format", "auto")
 
+    if not os.path.isabs(log_path):
+        return jsonify({"error": "Path must be absolute"}), 400
+
+    real_log_path = os.path.realpath(log_path)
     allowed_paths = app.config.get("MONITOR_ALLOWED_PATHS", [])
-    if not any(log_path.startswith(p) for p in allowed_paths):
+    allowed_roots = [os.path.realpath(p) for p in allowed_paths]
+
+    if not any(
+        os.path.commonpath([real_log_path, root]) == root
+        for root in allowed_roots
+    ):
         return jsonify({"error": "Path not in allowed monitor paths"}), 403
 
-    if not os.path.isfile(log_path):
+    if not os.path.isfile(real_log_path):
         return jsonify({"error": "File not found"}), 404
 
     def tail_worker():
         parser = LogParser(log_format=log_format)
         detector = IPDetector()
-        with open(log_path, "r", encoding="utf-8", errors="ignore") as fh:
+        with open(real_log_path, "r", encoding="utf-8", errors="ignore") as fh:
             fh.seek(0, 2)  # jump to end
             while True:
                 line = fh.readline()
@@ -283,7 +292,7 @@ def monitor_start():
 
     t = threading.Thread(target=tail_worker, daemon=True)
     t.start()
-    return jsonify({"status": "monitoring started", "path": log_path})
+    return jsonify({"status": "monitoring started", "path": real_log_path})
 
 
 # ---------------------------------------------------------------------------
