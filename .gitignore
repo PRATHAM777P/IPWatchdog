@@ -1,0 +1,61 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# IPWatchdog .gitignore
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Secrets & environment ─────────────────────────────────────────────────────
+.env
+*.env
+.env.*
+!.env.example          # keep the template
+
+# ── Generated / runtime data ──────────────────────────────────────────────────
+result.txt             # contains real IP addresses from analysis runs
+ip_set.csv             # contains parsed log data (PII risk)
+*.csv                  # any other CSV output
+ipwatchdog.log         # runtime log file
+*.log                  # access logs, server logs
+access_log.txt
+uploads/
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+ENV/
+.env/
+
+# ── IDEs ─────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
